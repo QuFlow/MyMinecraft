@@ -39,10 +39,39 @@ public class Main {
     private void loop() {
         while (!glfwWindowShouldClose(window)) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // 清屏
+            // 开始画画
+            // 开启深度测试，这样近处的方块才会遮挡远处的，否则画面会乱掉
+            glEnable(GL_DEPTH_TEST);
+            glRotatef(0.5f, 1.0f, 1.0f, 0.0f);
+            glBegin(GL_QUADS);
+            // --- 顶面 (草地绿) ---
+            glColor3f(0.0f, 1.0f, 0.0f);
+            glVertex3f( 0.5f,  0.5f, -0.5f);
+            glVertex3f(-0.5f,  0.5f, -0.5f);
+            glVertex3f(-0.5f,  0.5f,  0.5f);
+            glVertex3f( 0.5f,  0.5f,  0.5f);
+
+            // --- 底面 (泥土棕) ---
+            glColor3f(0.5f, 0.35f, 0.05f);
+            glVertex3f( 0.5f, -0.5f,  0.5f);
+            glVertex3f(-0.5f, -0.5f,  0.5f);
+            glVertex3f(-0.5f, -0.5f, -0.5f);
+            glVertex3f( 0.5f, -0.5f, -0.5f);
+
+            // --- 正面 (深绿) ---
+            glColor3f(0.0f, 0.8f, 0.0f);
+            glVertex3f( 0.5f,  0.5f,  0.5f);
+            glVertex3f(-0.5f,  0.5f,  0.5f);
+            glVertex3f(-0.5f, -0.5f,  0.5f);
+            glVertex3f( 0.5f, -0.5f,  0.5f);
+
+            // ... 为了节省篇幅，你可以先运行这三个面
+            glEnd();
 
             // 交换缓冲区，显示画面
             glfwSwapBuffers(window);
             glfwPollEvents();
+
         }
     }
 
