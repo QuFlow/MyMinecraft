@@ -4,9 +4,19 @@ import org.lwjgl.opengl.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryUtil.*;
+import static org.lwjgl.system.MemoryStack.stackPush;
+import org.lwjgl.stb.STBImage;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import org.lwjgl.system.MemoryStack;
 
 public class Main {
     private long window;
+
+    //RGB color
+    float r = 0.2f;
+    float g = 0.7f;
+    float b = 0.2f;
 
     // 位置与相机
     float cameraX = 0f, cameraY = -5f, cameraZ = -3f;
@@ -16,10 +26,49 @@ public class Main {
     // 物理参数
     float verticalVelocity = 0.0f;
     float gravity = -0.001f;       // 重力强度
-    float jumpStrength = 0.3f;    // 跳跃高度
+    float jumpStrength = 0.2f;    // 跳跃高度
     boolean isGrounded = false;
     float playerHeight = 1.8f;     // 眼睛高度
 
+    private int grassSideTex; // 侧面
+    private int grassTop; //上面
+    private int grassBottom; //上面
+
+    private int loadTexture(String filename) {
+        int width, height;
+        ByteBuffer image;
+
+        // 使用 MemoryStack 来安全地分配临时内存
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer w = stack.mallocInt(1);
+            IntBuffer h = stack.mallocInt(1);
+            IntBuffer comp = stack.mallocInt(1);
+
+            // 获取图片的完整路径（或者从 resources 流读取）
+            String path = "src/main/resources/" + filename;
+            STBImage.stbi_set_flip_vertically_on_load(true);
+            image = STBImage.stbi_load(path, w, h, comp, 4);
+
+            if (image == null) {
+                throw new RuntimeException("未能加载图片 [" + filename + "]: " + STBImage.stbi_failure_reason());
+            }
+
+            width = w.get(0);
+            height = h.get(0);
+        } // 这里 stack 会自动弹出，释放 w, h, comp 的内存
+
+        int textureID = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        // 像素风格必备
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+
+        STBImage.stbi_image_free(image); // 释放显存数据副本
+        return textureID;
+    }
     public void run() {
         init();
         loop();
@@ -41,6 +90,12 @@ public class Main {
 
         // 隐藏鼠标
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+        // 在 init() 的最后面
+        glEnable(GL_TEXTURE_2D);
+        grassSideTex = loadTexture("grass2.png"); // 确保文件名一致
+        grassTop = loadTexture("grass1.png");
+        grassBottom = loadTexture("grass3.png");
     }
 
     private void loop() {
@@ -154,12 +209,8 @@ public class Main {
                 glPushMatrix();
                 glTranslatef(x, y, z);
 
-                // 简单的海拔着色逻辑
-                if (y > 2.0f) glColor3f(1.0f, 1.0f, 1.0f);      // 雪
-                else if (y > 0.0f) glColor3f(0.2f, 0.7f, 0.2f); // 草
-                else glColor3f(0.4f, 0.3f, 0.1f);               // 泥
 
-                drawCube();
+                drawCube(r,g,b);
                 glPopMatrix();
             }
         }
@@ -179,29 +230,53 @@ public class Main {
         return (h - myFootH) > 0.6f; // 超过 0.6 个单位的高度差就算撞墙
     }
 
-    private void drawCube() {
+    private void drawCube(float r, float g, float b) {
+        // --- 1. 渲染顶面 (草顶) ---
+        glBindTexture(GL_TEXTURE_2D, grassTop);
         glBegin(GL_QUADS);
-        // 顶
-        glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
-        glVertex3f(-0.5f, 0.5f, 0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
-        // 底
-        glVertex3f(0.5f, -0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
-        glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
-        // 前
-        glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
-        glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
-        // 后
-        glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
-        glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
-        // 左
-        glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
-        glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
-        // 右
-        glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
-        glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
+
+        glTexCoord2f(0, 1); glVertex3f( 0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 1); glVertex3f(-0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f,  0.5f,  0.5f);
+        glTexCoord2f(0, 0); glVertex3f( 0.5f,  0.5f,  0.5f);
+        glEnd();
+
+// --- 2. 渲染侧面 (草侧) ---
+        glBindTexture(GL_TEXTURE_2D, grassSideTex);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 1); glVertex3f(-0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 1); glVertex3f(-0.5f,  0.5f,  0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f, -0.5f,  0.5f);
+        glTexCoord2f(0, 0); glVertex3f(-0.5f, -0.5f, -0.5f);
+
+
+        glTexCoord2f(0, 1); glVertex3f( 0.5f,  0.5f,  0.5f);
+        glTexCoord2f(1, 1); glVertex3f( 0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 0); glVertex3f( 0.5f, -0.5f, -0.5f);
+        glTexCoord2f(0, 0); glVertex3f( 0.5f, -0.5f,  0.5f);
+
+        glTexCoord2f(0, 1); glVertex3f( 0.5f,  0.5f,  0.5f);
+        glTexCoord2f(1, 1); glVertex3f(-0.5f,  0.5f,  0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f, -0.5f,  0.5f);
+        glTexCoord2f(0, 0); glVertex3f( 0.5f, -0.5f,  0.5f);
+
+        glTexCoord2f(0, 1); glVertex3f(-0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 1); glVertex3f( 0.5f,  0.5f, -0.5f);
+        glTexCoord2f(1, 0); glVertex3f( 0.5f, -0.5f, -0.5f);
+        glTexCoord2f(0, 0); glVertex3f(-0.5f, -0.5f, -0.5f);
+        glEnd();
+
+// --- 3. 渲染底面 (泥土) ---
+// 如果你有泥土贴图就 Bind 泥土，没有就继续用 Side 或者解绑
+
+        glBindTexture(GL_TEXTURE_2D, grassBottom);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 1); glVertex3f( 0.5f, -0.5f,  0.5f);
+        glTexCoord2f(1, 1); glVertex3f(-0.5f, -0.5f,  0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f, -0.5f, -0.5f);
+        glTexCoord2f(0, 0); glVertex3f( 0.5f, -0.5f, -0.5f);
         glEnd();
     }
-
     public static void main(String[] args) {
         new Main().run();
     }
