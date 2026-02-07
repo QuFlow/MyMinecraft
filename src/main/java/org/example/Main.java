@@ -15,11 +15,15 @@ public class Main {
     // 定义相机的 Z 位置（初始放在远处看方块）
     float cameraZ = -3.0f;
     float cameraX = 0f;
-    float cameraY = -1.5f;
-
+    float cameraY = -5f;
     float yaw = 0.0f;    // 左右转动 (围绕 Y 轴)
     float pitch = 0.0f;  // 上下转动 (围绕 X 轴)
     double lastMouseX = 400, lastMouseY = 300; // 假设窗口中心开始
+
+    float verticalVelocity = 0.0f; // 垂直速度
+    float gravity = -0.005f;       // 重力加速度（每帧下落的速度增量）
+    float jumpStrength = 0.15f;    // 跳跃初速度
+    boolean isGrounded = false;    // 是否踩在地面上
 
     public void run() {
         init();
@@ -52,6 +56,7 @@ public class Main {
     private void loop() {
 
         while (!glfwWindowShouldClose(window)) {
+
             double[] mouseX = new double[1];
             double[] mouseY = new double[1];
             glfwGetCursorPos(window, mouseX, mouseY);
@@ -125,16 +130,20 @@ public class Main {
             glTranslatef(cameraX, cameraY, cameraZ);
 
             // --- 第三步：开始批量画方块 ---
-            for (int x = -5; x < 5; x++) {
-                for (int z = -5; z < 5; z++) {
+            // 扩大渲染范围，这样你能看到连绵的山
+            for (int x = -20; x < 20; x++) {
+                for (int z = -20; z < 20; z++) {
                     glPushMatrix();
-                    // 每一个方块相对于当前相机位置进行偏移
-                    glTranslatef(x * 1.0f, 0f, z * 1.0f);
+
+                    // 关键：高度不再是固定的 -1.0f，而是根据函数算出
+                    float y = getHeight(x, z);
+                    glTranslatef(x * 1.0f, y, z * 1.0f);
+
+
                     drawCube();
                     glPopMatrix();
                 }
             }
-
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
@@ -186,7 +195,14 @@ public class Main {
         // ... 为了节省篇幅，你可以先运行这三个面
         glEnd();
     }
-
+    private float getHeight(float x, float z) {
+        // 线代本质：将空间坐标映射为高度标量（Scalar Field）
+        // 这里的数字（0.1f, 0.2f）决定了山的“陡峭”程度
+        float height = (float) (Math.sin(x * 0.2f) * Math.cos(z * 0.2f) * 3.0f);
+        // 再叠加一层高频波，增加细节起伏
+        height += (float) (Math.sin(x * 0.5f) * 1.2f);
+        return height;
+    }
     public static void main(String[] args) {
         new Main().run();
     }
