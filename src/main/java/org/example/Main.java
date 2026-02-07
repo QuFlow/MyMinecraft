@@ -65,6 +65,26 @@ public class Main {
             glVertex3f(-0.5f, -0.5f,  0.5f);
             glVertex3f( 0.5f, -0.5f,  0.5f);
 
+            //--- 背面
+            glColor3f(0.9f, 0.01f, 0.02f);
+            glVertex3f( 0.5f,  -0.5f,  -0.5f);
+            glVertex3f( -0.5f,  -0.5f,  -0.5f);
+            glVertex3f( -0.5f,  0.5f,  -0.5f);
+            glVertex3f( 0.5f,  0.5f,  -0.5f);
+
+            //--- 左面
+            glColor3f(1.0f, 1.0f, 1.0f);
+            glVertex3f( -0.5f,  0.5f,  -0.5f);
+            glVertex3f(-0.5f,  0.5f,  0.5f);
+            glVertex3f(-0.5f, -0.5f,  0.5f);
+            glVertex3f(-0.5f, -0.5f, -0.5f);
+
+            //--- 右面
+            glColor3f(1.0f, 1.0f, 0f);
+            glVertex3f( 0.5f,  0.5f,  0.5f);
+            glVertex3f(0.5f,  -0.5f,  0.5f);
+            glVertex3f(0.5f,  -0.5f,  -0.5f);
+            glVertex3f(0.5f,  0.5f,  -0.5f);
             // ... 为了节省篇幅，你可以先运行这三个面
             glEnd();
 
