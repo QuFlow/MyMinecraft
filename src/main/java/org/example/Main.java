@@ -1,34 +1,28 @@
 package org.example;
 
-//TIP 要<b>运行</b>代码，请按 <shortcut actionId="Run"/> 或
-// 点击装订区域中的 <icon src="AllIcons.Actions.Execute"/> 图标。
-
 import org.lwjgl.opengl.*;
-
-
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
 public class Main {
     private long window;
-    // 定义相机的 Z 位置（初始放在远处看方块）
-    float cameraZ = -3.0f;
-    float cameraX = 0f;
-    float cameraY = -5f;
-    float yaw = 0.0f;    // 左右转动 (围绕 Y 轴)
-    float pitch = 0.0f;  // 上下转动 (围绕 X 轴)
-    double lastMouseX = 400, lastMouseY = 300; // 假设窗口中心开始
 
-    float verticalVelocity = 0.0f; // 垂直速度
-    float gravity = -0.005f;       // 重力加速度（每帧下落的速度增量）
-    float jumpStrength = 0.15f;    // 跳跃初速度
-    boolean isGrounded = false;    // 是否踩在地面上
+    // 位置与相机
+    float cameraX = 0f, cameraY = -5f, cameraZ = -3f;
+    float yaw = 0.0f, pitch = 0.0f;
+    double lastMouseX = 400, lastMouseY = 300;
+
+    // 物理参数
+    float verticalVelocity = 0.0f;
+    float gravity = -0.001f;       // 重力强度
+    float jumpStrength = 0.3f;    // 跳跃高度
+    boolean isGrounded = false;
+    float playerHeight = 1.8f;     // 眼睛高度
 
     public void run() {
         init();
         loop();
-        // 释放内存
         glfwDestroyWindow(window);
         glfwTerminate();
     }
@@ -36,173 +30,178 @@ public class Main {
     private void init() {
         if (!glfwInit()) throw new IllegalStateException("无法初始化 GLFW");
 
-        // 配置窗口
-        window = glfwCreateWindow(800, 600, "My Minecraft", NULL, NULL);
+        window = glfwCreateWindow(800, 600, "QuFlow's Minecraft", NULL, NULL);
         if (window == NULL) throw new RuntimeException("窗口创建失败");
 
-        // 设置当前 OpenGL 上下文
         glfwMakeContextCurrent(window);
-        GL.createCapabilities(); // 这行非常重要，它连接了 Java 和 OpenGL
+        GL.createCapabilities();
 
-        // 设置背景颜色（天空蓝）
-        glClearColor(0.5f, 0.8f, 1.0f, 0.0f);
-        // 开启深度测试，这样近处的方块才会遮挡远处的，否则画面会乱掉
+        glClearColor(0.5f, 0.8f, 1.0f, 1.0f); // 天空蓝
         glEnable(GL_DEPTH_TEST);
 
-
+        // 隐藏鼠标
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     }
 
     private void loop() {
-
         while (!glfwWindowShouldClose(window)) {
+            handleInput();
+            applyPhysics();
+            render();
 
-            double[] mouseX = new double[1];
-            double[] mouseY = new double[1];
-            glfwGetCursorPos(window, mouseX, mouseY);
-
-// 计算偏移量
-            float deltaX = (float) (mouseX[0] - lastMouseX);
-            float deltaY = (float) (mouseY[0] - lastMouseY);
-            lastMouseX = mouseX[0];
-            lastMouseY = mouseY[0];
-
-// 灵敏度调节
-            float sensitivity = 0.1f;
-            yaw += deltaX * sensitivity;
-            pitch += deltaY * sensitivity;
-
-// 限制仰角，防止“倒立”
-            if (pitch > 89.0f) pitch = 89.0f;
-            if (pitch < -89.0f) pitch = -89.0f;
-
-
-            // 控制逻辑
-            float speed = 0.05f;
-// 将角度转换为弧度，因为 Java 的 Math.sin/cos 只吃弧度
-            float radYaw = (float) Math.toRadians(yaw);
-
-// W 键：向前走
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-                cameraX -= (float) Math.sin(radYaw) * speed;
-                cameraZ += (float) Math.cos(radYaw) * speed;
-            }
-// S 键：向后走
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                cameraX += (float) Math.sin(radYaw) * speed;
-                cameraZ -= (float) Math.cos(radYaw) * speed;
-            }
-// A 键：向左平移（角度偏移 90 度，即 radYaw + PI/2）
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                cameraX += (float) Math.cos(radYaw) * speed;
-                cameraZ += (float) Math.sin(radYaw) * speed;
-            }
-// D 键：向右平移
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                cameraX -= (float) Math.cos(radYaw) * speed;
-                cameraZ -= (float) Math.sin(radYaw) * speed;
-            }
-            if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-                cameraY-= speed;
-            }
-            if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-                cameraY+=speed;
-            }
-            // --- 第一步：设置投影（眼睛的属性） ---
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            float fh = (float) Math.tan(Math.toRadians(45.0f / 2.0f)) * 0.1f;
-            float fw = fh * (800.0f / 600.0f);
-            glFrustum(-fw, fw, -fh, fh, 0.1f, 100.0f);
-
-            // --- 第二步：设置视图和模型（身体的位置和姿态） ---
-            glMatrixMode(GL_MODELVIEW);
-            glLoadIdentity(); // 必须在这里清空，开始计算新的帧
-
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            // 【核心线代顺序】：先旋转，后平移
-            // 想象一下：你要先告诉显卡你头偏了多少（旋转），再告诉它世界被推开了多少（位移）
-            glRotatef(pitch, 1.0f, 0.0f, 0.0f); // 抬头低头
-            glRotatef(yaw, 0.0f, 1.0f, 0.0f);   // 左右转头
-
-            // 平移世界：注意这里的 Y 设为 -1.5f 能让你感觉自己“站”在地面上
-            glTranslatef(cameraX, cameraY, cameraZ);
-
-            // --- 第三步：开始批量画方块 ---
-            // 扩大渲染范围，这样你能看到连绵的山
-            for (int x = -20; x < 20; x++) {
-                for (int z = -20; z < 20; z++) {
-                    glPushMatrix();
-
-                    // 关键：高度不再是固定的 -1.0f，而是根据函数算出
-                    float y = getHeight(x, z);
-                    glTranslatef(x * 1.0f, y, z * 1.0f);
-
-
-                    drawCube();
-                    glPopMatrix();
-                }
-            }
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
     }
 
+    private void handleInput() {
+        // --- 鼠标旋转 ---
+        double[] mouseX = new double[1];
+        double[] mouseY = new double[1];
+        glfwGetCursorPos(window, mouseX, mouseY);
+
+        float deltaX = (float) (mouseX[0] - lastMouseX);
+        float deltaY = (float) (mouseY[0] - lastMouseY);
+        lastMouseX = mouseX[0];
+        lastMouseY = mouseY[0];
+
+        yaw += deltaX * 0.12f;
+        pitch += deltaY * 0.12f;
+        if (pitch > 89f) pitch = 89f;
+        if (pitch < -89f) pitch = -89f;
+
+        // --- 键盘移动与碰撞预判 ---
+        float speed = 0.08f;
+        float radYaw = (float) Math.toRadians(yaw);
+        float nextX = cameraX;
+        float nextZ = cameraZ;
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            nextX -= (float) Math.sin(radYaw) * speed;
+            nextZ += (float) Math.cos(radYaw) * speed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            nextX += (float) Math.sin(radYaw) * speed;
+            nextZ -= (float) Math.cos(radYaw) * speed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            nextX += (float) Math.cos(radYaw) * speed;
+            nextZ += (float) Math.sin(radYaw) * speed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            nextX -= (float) Math.cos(radYaw) * speed;
+            nextZ -= (float) Math.sin(radYaw) * speed;
+        }
+
+        // 侧面碰撞检测 (简易 AABB)
+        float pRadius = 0.3f;
+        if (!isSolid(-nextX - pRadius, -cameraZ) && !isSolid(-nextX + pRadius, -cameraZ)) {
+            cameraX = nextX;
+        }
+        if (!isSolid(-cameraX, -nextZ - pRadius) && !isSolid(-cameraX, -nextZ + pRadius)) {
+            cameraZ = nextZ;
+        }
+
+        // 跳跃
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && isGrounded) {
+            verticalVelocity = jumpStrength;
+            isGrounded = false;
+        }
+    }
+
+    private void applyPhysics() {
+        // 重力应用
+        verticalVelocity += gravity;
+        cameraY -= verticalVelocity;
+
+        // 地面碰撞检测
+        float terrainH = getHeight(-cameraX, -cameraZ);
+        float footPos = -cameraY - playerHeight;
+
+        if (footPos <= terrainH) {
+            cameraY = -(terrainH + playerHeight);
+            verticalVelocity = 0;
+            isGrounded = true;
+        } else {
+            isGrounded = false;
+        }
+    }
+
+    private void render() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // --- 投影矩阵 ---
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        float fh = (float) Math.tan(Math.toRadians(35.0f)) * 0.1f; // 缩窄点视野更有深度感
+        float fw = fh * (800.0f / 600.0f);
+        glFrustum(-fw, fw, -fh, fh, 0.1f, 300.0f);
+
+        // --- 视图矩阵 ---
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glRotatef(pitch, 1.0f, 0.0f, 0.0f);
+        glRotatef(yaw, 0.0f, 1.0f, 0.0f);
+        glTranslatef(cameraX, cameraY, cameraZ);
+
+        // --- 批量渲染世界 ---
+        int renderDist = 40; // 视距
+        for (int x = (int)(-cameraX) - renderDist; x < (int)(-cameraX) + renderDist; x++) {
+            for (int z = (int)(-cameraZ) - renderDist; z < (int)(-cameraZ) + renderDist; z++) {
+
+                float y = getHeight(x, z);
+
+                glPushMatrix();
+                glTranslatef(x, y, z);
+
+                // 简单的海拔着色逻辑
+                if (y > 2.0f) glColor3f(1.0f, 1.0f, 1.0f);      // 雪
+                else if (y > 0.0f) glColor3f(0.2f, 0.7f, 0.2f); // 草
+                else glColor3f(0.4f, 0.3f, 0.1f);               // 泥
+
+                drawCube();
+                glPopMatrix();
+            }
+        }
+    }
+
+    private float getHeight(float x, float z) {
+        // 正弦波叠加模拟分形地形
+        float h = (float) (Math.sin(x * 0.15f) * Math.cos(z * 0.15f) * 4.0f);
+        h += (float) (Math.sin(x * 0.4f) * 1.5f); // 增加小起伏
+        return h;
+    }
+
+    private boolean isSolid(float x, float z) {
+        // 如果高度差太大，就认为它是堵墙
+        float h = getHeight(x, z);
+        float myFootH = -cameraY - playerHeight;
+        return (h - myFootH) > 0.6f; // 超过 0.6 个单位的高度差就算撞墙
+    }
+
     private void drawCube() {
         glBegin(GL_QUADS);
-        // --- 顶面 (草地绿) ---
-        glColor3f(0.0f, 1.0f, 0.0f);
-        glVertex3f( 0.5f,  0.5f, -0.5f);
-        glVertex3f(-0.5f,  0.5f, -0.5f);
-        glVertex3f(-0.5f,  0.5f,  0.5f);
-        glVertex3f( 0.5f,  0.5f,  0.5f);
-
-        // --- 底面 (泥土棕) ---
-        glColor3f(0.5f, 0.35f, 0.05f);
-        glVertex3f( 0.5f, -0.5f,  0.5f);
-        glVertex3f(-0.5f, -0.5f,  0.5f);
-        glVertex3f(-0.5f, -0.5f, -0.5f);
-        glVertex3f( 0.5f, -0.5f, -0.5f);
-
-        // --- 正面 (深绿) ---
-        glColor3f(0.5f, 0.3f, 0.5f);
-        glVertex3f( 0.5f,  0.5f,  0.5f);
-        glVertex3f(-0.5f,  0.5f,  0.5f);
-        glVertex3f(-0.5f, -0.5f,  0.5f);
-        glVertex3f( 0.5f, -0.5f,  0.5f);
-
-        //--- 背面
-        glColor3f(0.9f, 0.01f, 0.02f);
-        glVertex3f( 0.5f,  -0.5f,  -0.5f);
-        glVertex3f( -0.5f,  -0.5f,  -0.5f);
-        glVertex3f( -0.5f,  0.5f,  -0.5f);
-        glVertex3f( 0.5f,  0.5f,  -0.5f);
-
-        //--- 左面
-        glColor3f(1.0f, 1.0f, 1.0f);
-        glVertex3f( -0.5f,  0.5f,  -0.5f);
-        glVertex3f(-0.5f,  0.5f,  0.5f);
-        glVertex3f(-0.5f, -0.5f,  0.5f);
-        glVertex3f(-0.5f, -0.5f, -0.5f);
-
-        //--- 右面
-        glColor3f(1.0f, 1.0f, 0f);
-        glVertex3f( 0.5f,  0.5f,  0.5f);
-        glVertex3f(0.5f,  -0.5f,  0.5f);
-        glVertex3f(0.5f,  -0.5f,  -0.5f);
-        glVertex3f(0.5f,  0.5f,  -0.5f);
-        // ... 为了节省篇幅，你可以先运行这三个面
+        // 顶
+        glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
+        glVertex3f(-0.5f, 0.5f, 0.5f); glVertex3f(0.5f, 0.5f, 0.5f);
+        // 底
+        glVertex3f(0.5f, -0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
+        glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
+        // 前
+        glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
+        glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
+        // 后
+        glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
+        glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
+        // 左
+        glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
+        glVertex3f(-0.5f, -0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, -0.5f);
+        // 右
+        glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
+        glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
         glEnd();
     }
-    private float getHeight(float x, float z) {
-        // 线代本质：将空间坐标映射为高度标量（Scalar Field）
-        // 这里的数字（0.1f, 0.2f）决定了山的“陡峭”程度
-        float height = (float) (Math.sin(x * 0.2f) * Math.cos(z * 0.2f) * 3.0f);
-        // 再叠加一层高频波，增加细节起伏
-        height += (float) (Math.sin(x * 0.5f) * 1.2f);
-        return height;
-    }
+
     public static void main(String[] args) {
         new Main().run();
     }
